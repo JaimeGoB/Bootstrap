@@ -1,0 +1,179 @@
+---
+title: "Estimating Covariance with Bootstrap"
+author: "Jaime"
+date: "10/27/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(boot)
+library(caret)
+library(bestglm)
+```
+
+## 1. Consider the gpa data stored in the gpa.csv file available on eLearning. The data consist of GPA at the end of freshman year (gpa) and ACT test score (act) for randomly selected 120 students from a new freshman class.
+
+(a) Make a scatterplot of gpa against act and comment on the strength of linear relationship between the two variables.
+
+```{r plot, fig.width= 5, fig.height=5, message=FALSE, echo=FALSE}
+#Reading the dataset
+gpa_dataset <- read.csv("gpa.csv")
+gpa <- as.numeric(gpa_dataset$gpa)
+act <- as.numeric(gpa_dataset$act)
+
+#plotting the dataset
+plot(act, gpa, main = "ACT vs GPA ")
+abline(lm(gpa ~ act, data = gpa_dataset), col = "red")
+legend("bottomleft", 
+       legend = c("Line of Best Fit"),
+       col=c("red"), 
+       lty=1:2)
+```
+
+## Interpreting Results
+From the previous scatter plot it is evident to see:
+
+- The points are not very close to each other or the mean, in other words words there is a weak relationship.
+
+- The slope is positive increasing, hence there exists a linear relationship.
+
+We can conclude that there is a **Weak Linear Relationship** between ACT and GPA. 
+
+## (b) Let p denote the population correlation between gpa and act. Provide a point estimate of p, bootstrap estimates of bias and standard error of the point estimate, and 95% confidence interval computed using percentile bootstrap. Interpret the results.
+
+#### The correlation between GPA and ACT is:
+```{r, message=FALSE, echo=FALSE}
+#Correlation Matrix
+correlation <- cor(gpa_dataset)
+#Extracting Correlation between variables
+correlation_gpa_act <- correlation[2]
+correlation_gpa_act
+```
+
+```{r, message=TRUE}
+#Creating function to manually calculate bootstrap for every x,y values
+get_correlation <- function(data, index) {
+  gpa.index <- gpa_dataset$gpa[index]
+  act.index <- gpa_dataset$act[index]
+  result <- cor(gpa.index, act.index)
+  return(result)
+}
+
+#Running correlation 1000 for x,y values in dataset
+gpa_boot <- boot(gpa_dataset, get_correlation, R = 1000, sim = "ordinary", stype = "i")
+
+```
+
+##### Point Estimate of p:
+```{r}
+#Estimate for correlation of ACT vs GPA based on 1000 bootrap samples
+correlation_gpa_act_bootstrap <- mean(gpa_boot$t) 
+correlation_gpa_act_bootstrap
+```
+#### Bootstrap Estimates of Bias
+```{r}
+# Bootstrap Estimate of Bias
+correlation_gpa_act_bootstrap - correlation_gpa_act
+```
+#### Standard Error of Point Estimate P
+```{r}
+# Standard Error of Point Estimate - bootstrap replicate of the result of calling statistic.
+sd(gpa_boot$t)
+```
+#### Confidence Interval using Bootstrap
+```{r}
+# 95% confidence interval
+boot.ci(gpa_boot, type = "perc")
+```
+## Interpreting Results
+
+Actual p:  0.2694818
+
+Using Bootstrap
+Estimate p: 0.2747637
+
+Standard Error of p: 0.1102458
+
+We are 95% for that true correlation values (p) will be between 0.0645,  0.4879.
+
+## (c) Fit a simple linear regression model for predicting gpa on the basis of act. Provide the least square estimates of the regression coefficients, standard errors of the estimates, and 95% confidence intervals of the coefficients. Perform model diagnostics to verify the model assumptions and comment on the results.
+
+#### Fitting a Model and getting LSE and SE of estimates:
+```{r}
+#Fitting a Model 
+full_model <- lm(gpa ~ act, data = gpa_dataset)
+
+#Least Square Estimates and SE of estimates
+summary(full_model)
+```
+
+#### Performing a 95% confidence intervals of the coefficients:
+```{r}
+# 95% confidence interval
+confint(full_model, level = 0.95, method = "percentile")
+```
+
+#### Model Diagnostic Plots:
+```{r, figures-side, fig.show="hold", out.width="50%"}
+plot(full_model)
+```
+
+## Interpreting Results
+From the Diagnostic Plots we can see:
+
+- **Residuals vs Fitted.**
+
+- **Normal Q-Q.**
+The residuals look fairly normally distributed. With the exception of a couple of outliers.
+
+- **Residuals vs Leverage.**
+
+
+## (d) Use nonparametric bootstrap to compute the standard errors and 95% confidence intervals (using percentile bootstrap) mentioned in part (c) and compare the two sets of results.
+
+```{r}
+#Function to compute coefficients of line of best fit 1000 times
+coefficients_line_of_best_fit <- function(data, index) {
+  coefficients_for_sample <- coef(lm(gpa ~ act, data = gpa_dataset, subset = index))[2]
+  return(coefficients_for_sample)
+}
+
+boot_regression_coefficients <- boot(gpa_dataset, coefficients_line_of_best_fit, R = 1000)
+```
+
+#### Coefficient Estimate Using Bootstrap
+```{r}
+#coefficient estimate of gpa
+coefficients_bootstrap <- mean(boot_regression_coefficients$t) 
+coefficients_bootstrap
+```
+
+#### Standard Error Using Bootstrap
+```{r}
+# standard error estimate
+sd(boot_regression_coefficients$t)
+```
+
+#### Confidence Interval Using Bootstrap
+```{r}
+# 95% confidence interval
+boot.ci(boot_regression_coefficients, type = "perc")
+```
+## Interpreting Results
+**Least Square Estimates**
+
+- Coefficient of ACT: 0.03883
+
+- Standard Error of ACT: 0.01277
+
+- Conf. Interval of ACT: 0.01353307 0.06412118
+
+**Bootstrap Estimates**
+
+- Coefficient of ACT: 0.03924538
+
+- Standard Error of ACT: 0.01443574
+
+- Conf. Interval of ACT: 0.0096,  0.0671
